@@ -1,0 +1,16 @@
+version: "3.4"
+services:
+  scheduler:
+    volumes:
+      - D:/Work/resources/data/raw:/usr/local/airflow/raw
+      # - D:/Work/resources/data/raw:/opt/airflow/raw
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
