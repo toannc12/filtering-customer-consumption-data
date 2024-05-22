@@ -9,37 +9,10 @@ import pandas as pd
 # import os
 # from check_record_counts_operator import CheckRecordCountsOperator
 
-from airflow.models import BaseOperator
+# from airflow.models import BaseOperator
 # from airflow.utils.decorators import apply_defaults
 # from airflow.hooks.postgres_hook import PostgresHook
 # import pandas as pd
-
-# class CheckRecordCountsOperator(BaseOperator):
-
-#     def __init__(self, table_name, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.file_path='/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv'
-#         # self.execution_date = execution_date
-#         self.table_name = table_name
-
-#     def execute(self, context):
-#         hook = PostgresHook(postgres_conn_id="postgres_default")
-#         # Load the raw data from the CSV file
-#         df = pd.read_csv(self.file_path)
-#         # Count the number of records for each category in the raw data
-#         raw_category_counts = df['Category'].value_counts()
-             
-#         for key, value in self.table_name.items():
-#             record_count  = hook.get_records(f"SELECT COUNT(*) FROM {value}")
-#             expected_count = raw_category_counts.get(key, 0)
-#             actual_count = record_count[0][0]
-
-#             if expected_count != actual_count:
-#                 raise ValueError(f"Record count mismatch for '{key}' category. Expected: {expected_count}, Found: {actual_count}")
-
-#         self.log.info("Record count validation successful.")
-
-# =============================================================================== 
 
 # 1: Define the DAG and its Default Arguments
 default_args = {
@@ -56,8 +29,8 @@ default_args = {
 dag = DAG('filtering_customer_consumption_backup',
         default_args=default_args,
         description='DAG for filtering customer consumption data',
-        #   schedule_interval='50 11 * * *',
-        schedule_interval=None,
+        schedule_interval='50 11 * * *',
+        # schedule_interval=None,
         catchup=False)
 
 # 2: Define the Task to Check for File Existence
@@ -65,8 +38,8 @@ wait_and_check_file = FileSensor(
     task_id='wait_and_check_file',
     filepath='/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv',
     fs_conn_id='my_fs_conn',
-    poke_interval=60,  # check every 5 minutes 300
-    timeout=120,  # timeout after 15 minutes 900
+    poke_interval=300,  # check every 5 minutes 300
+    timeout=900,  # timeout after 15 minutes 900
     dag=dag
 )
 
