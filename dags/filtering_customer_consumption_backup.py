@@ -5,14 +5,8 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.contrib.sensors.file_sensor import FileSensor
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
-import pandas as pd
-# import os
-# from check_record_counts_operator import CheckRecordCountsOperator
 
-# from airflow.models import BaseOperator
-# from airflow.utils.decorators import apply_defaults
-# from airflow.hooks.postgres_hook import PostgresHook
-# import pandas as pd
+from python.process_stored_data import _process_and_load_data, _store_data
 
 # 1: Define the DAG and its Default Arguments
 default_args = {
@@ -44,32 +38,6 @@ wait_and_check_file = FileSensor(
 )
 
 # 3: Define the Task for Data Processing, Store and Insertion
-# functions
-def _process_and_load_data(**kwargs):
-    file_path = kwargs['templates_dict']['file_path']
-    # execution_date = kwargs['execution_date'].strftime('%Y-%m-%d %H:%M:%S')
-    # categories = ['Alcoholic beverages', 'Cereals and bakery products', 'Meats and poultry']
-    print(file_path)
-    df = pd.read_csv(file_path)
-    df['Month'] = pd.to_datetime(df["Month"]).dt.strftime("%Y-%m-%d")
-
-    # formatted_data = []
-    # for category in categories:
-    #     filtered_df = df[df['Category'] == category]
-    #     for _, row in filtered_df.iterrows():
-    #         formatted_data.append((row['Category'], row['Sub-Category'], row['Month'], row['Millions of Dollars'], execution_date))
-
-    # return formatted_data
-    df.to_csv(kwargs['templates_dict']['file_path_save'], index=None, sep=';')
-
-def _store_data(**kwargs):
-    hook = PostgresHook(postgres_conn_id="postgres_default")
-    execution_date = kwargs['templates_dict']['execution_date']
-    hook.copy_expert(
-        sql = f"COPY consumption_{execution_date} FROM stdin WITH DELIMITER as ';'",
-        filename = kwargs['templates_dict']['file_path']
-    )
-
 # tasks
 process_data_task = PythonOperator(
     task_id='process_data',
@@ -77,38 +45,10 @@ process_data_task = PythonOperator(
     templates_dict={'file_path': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv','file_path_save': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}_save.csv'}
 )
 
-create_table_task = PostgresOperator(
-    task_id='create_table',
+create_stored_table = PostgresOperator(
+    task_id='create_stored_table',
     postgres_conn_id='postgres_default',
-    sql="""
-        CREATE TABLE IF NOT EXISTS consumption_{{ ds_nodash }} (
-            Category TEXT,
-            "Sub-Category" TEXT,
-            Month TEXT,
-            "Millions of Dollars" TEXT
-        );
-        CREATE TABLE IF NOT EXISTS consumption_alcoholic_{{ ds_nodash }} (
-            category TEXT,
-            sub_category TEXT,
-            aggregation_date DATE,
-            millions_of_dollar INTEGER,
-            pipeline_exc_datetime DATE
-        );
-        CREATE TABLE IF NOT EXISTS consumption_cereals_bakery_{{ ds_nodash }} (
-            category TEXT,
-            sub_category TEXT,
-            aggregation_date DATE,
-            millions_of_dollar INTEGER,
-            pipeline_exc_datetime DATE
-        );
-        CREATE TABLE IF NOT EXISTS consumption_meats_poultry_{{ ds_nodash }} (
-            category TEXT,
-            sub_category TEXT,
-            aggregation_date DATE,
-            millions_of_dollar INTEGER,
-            pipeline_exc_datetime DATE
-        );
-    """
+    sql="sql/consumption.sql"
 )
 
 store_data_task = PythonOperator(
@@ -117,37 +57,24 @@ store_data_task = PythonOperator(
     templates_dict={'file_path': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}_save.csv','execution_date':'{{ ds_nodash }}'}
 )
 
-load_data_task = PostgresOperator(
-    task_id='load_data',
+create_insert_alcoholic_table = PostgresOperator(
+    task_id='create_insert_alcoholic_table',
     postgres_conn_id='postgres_default',
-    sql="""
-        INSERT INTO consumption_alcoholic_{{ ds_nodash }}(category, sub_category, aggregation_date, millions_of_dollar, pipeline_exc_datetime)
-        SELECT Category, "Sub-Category", to_date(Month,'YYYY-MM-DD'), CAST("Millions of Dollars" AS INTEGER), to_date('{{ ds }}', 'YYYY-MM-DD') as pipeline_exc_datetime
-        FROM consumption_{{ ds_nodash }}
-        WHERE Category='Alcoholic beverages';
-
-        INSERT INTO consumption_cereals_bakery_{{ ds_nodash }}(category, sub_category, aggregation_date, millions_of_dollar,pipeline_exc_datetime)
-        SELECT Category, "Sub-Category", to_date(Month,'YYYY-MM-DD'), CAST("Millions of Dollars" AS INTEGER), to_date('{{ ds }}', 'YYYY-MM-DD') as pipeline_exc_datetime
-        FROM consumption_{{ ds_nodash }}
-        WHERE Category='Cereals and bakery products';
-
-        INSERT INTO consumption_meats_poultry_{{ ds_nodash }}(category, sub_category, aggregation_date, millions_of_dollar,pipeline_exc_datetime)
-        SELECT Category, "Sub-Category", to_date(Month,'YYYY-MM-DD'), CAST("Millions of Dollars" AS INTEGER), to_date('{{ ds }}', 'YYYY-MM-DD') as pipeline_exc_datetime
-        FROM consumption_{{ ds_nodash }}
-        WHERE Category='Meats and poultry';
-    """,
-    trigger_rule='all_done'
+    sql="sql/consumption_alcoholic.sql",
 )
 
-# check_record_counts_task = CheckRecordCountsOperator(
-#     task_id='check_record_counts',
-#     # file_path='/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv',
-#     # execution_date='{{ ds_nodash }}',
-#     # categories=['Alcoholic beverages', 'Cereals and bakery products', 'Meats and poultry']
-#     table_name = {'Alcoholic beverages':'consumption_alcoholic_{{ ds_nodash }}', 'Cereals and bakery products':'consumption_cereals_bakery_{{ ds_nodash }}', 
-#                       'Meats and poultry':'consumption_meats_poultry_{{ ds_nodash }}'}
-# )
+create_insert_cereals_bakery_table = PostgresOperator(
+    task_id='create_insert_cereals_bakery_table',
+    postgres_conn_id='postgres_default',
+    sql="sql/consumption_cereals_bakery.sql",
+)
+
+create_insert_meats_poultry_table = PostgresOperator(
+    task_id='create_insert_meats_poultry_table',
+    postgres_conn_id='postgres_default',
+    sql="sql/consumption_meats_poultry.sql",
+)
 
 # 4: Set the Task Dependencies
-wait_and_check_file >> process_data_task >> create_table_task >> store_data_task >> load_data_task
+wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> [create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table]
 # wait_and_check_file >> process_data_task >> create_table_task >> store_data_task >> load_data_task >> check_record_counts_task
