@@ -23,8 +23,8 @@ default_args = {
 dag = DAG('filtering_customer_consumption_backup',
         default_args=default_args,
         description='DAG for filtering customer consumption data',
-        schedule_interval='50 11 * * *',
-        # schedule_interval=None,
+        # schedule_interval='50 11 * * *',
+        schedule_interval=None,
         catchup=False)
 
 # 2: Define the Task to Check for File Existence
@@ -32,8 +32,8 @@ wait_and_check_file = FileSensor(
     task_id='wait_and_check_file',
     filepath='/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv',
     fs_conn_id='my_fs_conn',
-    poke_interval=300,  # check every 5 minutes 300
-    timeout=900,  # timeout after 15 minutes 900
+    poke_interval=60,  # check every 5 minutes 300
+    timeout=120,  # timeout after 15 minutes 900
     dag=dag
 )
 
@@ -74,7 +74,16 @@ create_insert_meats_poultry_table = PostgresOperator(
     postgres_conn_id='postgres_default',
     sql="sql/consumption_meats_poultry.sql",
 )
+# ===================dynamic tasks ======================
+from dags.python.demo_dynamic import create_insert_table, table_data
+
+data = create_insert_table(table_data=table_data)
+
+create_insert_dynamic_task = PostgresOperator.partial(
+    task_id="create_insert_dynamic_task",
+    postgres_conn_id="postgres_default",
+).expand(sql=data)
 
 # 4: Set the Task Dependencies
-wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> [create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table]
-# wait_and_check_file >> process_data_task >> create_table_task >> store_data_task >> load_data_task >> check_record_counts_task
+# wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> [create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table]
+wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> create_insert_dynamic_task
