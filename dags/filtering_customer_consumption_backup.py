@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.contrib.sensors.file_sensor import FileSensor
-
+from airflow.models import Variable
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.task_group import TaskGroup
 
@@ -21,6 +21,9 @@ default_args = {
     'execution_timeout': timedelta(minutes=15),
 }
 
+file_path = Variable.get("file_path")
+file_name = 'consumption_{{ ds_nodash }}'
+
 with DAG('filtering_customer_consumption_backup',
         default_args=default_args,
         description='DAG for filtering customer consumption data',
@@ -31,8 +34,8 @@ with DAG('filtering_customer_consumption_backup',
     # 2: Define the Task to Check for File Existence
     wait_and_check_file = FileSensor(
         task_id='wait_and_check_file',
-        filepath='/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv',
-        fs_conn_id='my_fs_conn',
+        filepath=f'/{file_path}/{file_name}.csv',
+        fs_conn_id='my_fs',
         poke_interval=300,  # check every 5 minutes 300
         timeout=900,  # timeout after 15 minutes 900
     )
@@ -50,13 +53,13 @@ with DAG('filtering_customer_consumption_backup',
         process_data_task = PythonOperator(
             task_id='process_data',
             python_callable=_process_and_load_data,
-            templates_dict={'file_path': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}.csv','file_path_save': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}_save.csv'}
+            templates_dict={'file_path': f'/{file_path}/{file_name}.csv','file_path_save': f'/{file_path}/{file_name}_save.csv'}
         )
 
         store_data_task = PythonOperator(
             task_id='store_data',
             python_callable = _store_data,
-            templates_dict={'file_path': '/usr/local/airflow/raw/consumption_{{ ds_nodash }}_save.csv','execution_date':'{{ ds_nodash }}'}
+            templates_dict={'file_path': f'/{file_path}/{file_name}_save.csv','execution_date':'{{ ds_nodash }}'}
         )
 
         process_data_task >> store_data_task
@@ -104,6 +107,6 @@ with DAG('filtering_customer_consumption_backup',
         ]
     )
 
-    # 4: Set the Task Dependencies
+    # 5: Set the Task Dependencies
     # wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> [create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table]
     wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_dynamic_task >> check_data_task
