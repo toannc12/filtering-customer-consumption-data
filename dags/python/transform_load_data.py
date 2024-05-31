@@ -1,15 +1,8 @@
-table_data = [
-        {"table_name":"consumption_alcoholic_{{ ds_nodash }}","category_name":"Alcoholic beverages"},
-        {"table_name":"consumption_cereals_bakery_{{ ds_nodash }}","category_name":"Cereals and bakery products"},
-        {"table_name":"consumption_meats_poultry_{{ ds_nodash }}","category_name":"Meats and poultry"}
-    ]
+import json
 
-def create_insert_table(table_data):
+def create_insert_table(config_info):
     sql_queries = []
-    for data in table_data:
-        table_name = data["table_name"]
-        category_name = data["category_name"]
-
+    for table_name, category in zip(config_info['table_names'], config_info["categories"]):
         sql = f"""DROP TABLE IF EXISTS {table_name};
                 CREATE TABLE {table_name} (
                     category TEXT,
@@ -20,8 +13,8 @@ def create_insert_table(table_data):
                 );
                 INSERT INTO {table_name}(category, sub_category, aggregation_date, millions_of_dollar,pipeline_exc_datetime)
                     SELECT Category, "Sub-Category", to_date(Month,'YYYY-MM-DD'), CAST("Millions of Dollars" AS INTEGER), to_date('{{{{ ds }}}}', 'YYYY-MM-DD') as pipeline_exc_datetime
-                    FROM consumption_{{{{ ds_nodash }}}}
-                    WHERE Category='{category_name}';
+                    FROM {config_info["file_name"]}
+                    WHERE Category='{category}';
                 """
         sql_queries.append(sql)
     return sql_queries

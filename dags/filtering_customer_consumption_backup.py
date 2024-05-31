@@ -6,7 +6,7 @@ from airflow.contrib.sensors.file_sensor import FileSensor
 from airflow.models import Variable
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.task_group import TaskGroup
-
+import json
 from python.process_stored_data import _process_and_load_data, _store_data
 
 # 1: Define the DAG and its Default Arguments
@@ -21,23 +21,22 @@ default_args = {
     'execution_timeout': timedelta(minutes=15),
 }
 
-file_path = Variable.get("file_path")
-file_name = 'consumption_{{ ds_nodash }}'
+config_info = json.loads(Variable.get("config_info"))
 
 with DAG('filtering_customer_consumption_backup',
         default_args=default_args,
         description='DAG for filtering customer consumption data',
-        schedule_interval='50 11 * * *',
-        # schedule_interval=None,
+        # schedule_interval='50 11 * * *',
+        schedule_interval=None,
         catchup=False) as dag:
 
     # 2: Define the Task to Check for File Existence
     wait_and_check_file = FileSensor(
         task_id='wait_and_check_file',
-        filepath=f'/{file_path}/{file_name}.csv',
+        filepath=f'/{config_info["paths"]["file_path"]}/{config_info["file_name"]}.csv',
         fs_conn_id='my_fs',
-        poke_interval=300,  # check every 5 minutes 300
-        timeout=900,  # timeout after 15 minutes 900
+        poke_interval=30,  # check every 5 minutes 300
+        timeout=60,  # timeout after 15 minutes 900
     )
 
     # 3: Define the Task for Data Processing, Store and Insertion
@@ -53,13 +52,15 @@ with DAG('filtering_customer_consumption_backup',
         process_data_task = PythonOperator(
             task_id='process_data',
             python_callable=_process_and_load_data,
-            templates_dict={'file_path': f'/{file_path}/{file_name}.csv','file_path_save': f'/{file_path}/{file_name}_save.csv'}
+            templates_dict={'file_path': f'/{config_info["paths"]["file_path"]}/{config_info["file_name"]}.csv',
+                            'file_path_save': f'/{config_info["paths"]["file_path"]}/{config_info["file_name"]}_save.csv'}
         )
 
         store_data_task = PythonOperator(
             task_id='store_data',
             python_callable = _store_data,
-            templates_dict={'file_path': f'/{file_path}/{file_name}_save.csv','execution_date':'{{ ds_nodash }}'}
+            templates_dict={'file_path': f'/{config_info["paths"]["file_path_save"]}/{config_info["file_name"]}_save.csv',
+                            'execution_date':'{{ ds_nodash }}'}
         )
 
         process_data_task >> store_data_task
@@ -83,9 +84,9 @@ with DAG('filtering_customer_consumption_backup',
     # )
 
     # =================== using dynamic tasks ======================
-    from dags.python.transform_load_data import create_insert_table, table_data
+    from dags.python.transform_load_data import create_insert_table
 
-    data = create_insert_table(table_data=table_data)
+    data = create_insert_table(config_info)
 
     create_insert_dynamic_task = PostgresOperator.partial(
         task_id="create_insert_dynamic_task",
@@ -101,9 +102,9 @@ with DAG('filtering_customer_consumption_backup',
         python_callable=_check_data,
     ).expand_kwargs(
             [
-                {"op_kwargs": {"table_name":"consumption_alcoholic_{{ ds_nodash }}"}},
-                {"op_kwargs": {"table_name":"consumption_cereals_bakery_{{ ds_nodash }}"}},
-                {"op_kwargs": {"table_name":"consumption_meats_poultry_{{ ds_nodash }}"}}
+                {"op_kwargs": {"table_names":config_info["table_names"][0]}},
+                {"op_kwargs": {"table_names":config_info["table_names"][1]}},
+                {"op_kwargs": {"table_names":config_info["table_names"][2]}}
         ]
     )
 
