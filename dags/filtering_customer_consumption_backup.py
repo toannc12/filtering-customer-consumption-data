@@ -65,33 +65,39 @@ with DAG('filtering_customer_consumption_backup',
 
         process_data_task >> store_data_task
 
-    # create_insert_alcoholic_table = PostgresOperator(
-    #     task_id='create_insert_alcoholic_table',
-    #     postgres_conn_id='postgres_default',
-    #     sql="sql/consumption_alcoholic.sql",
-    # )
+    with TaskGroup(group_id='create_insert_data') as create_insert_data:
+        create_insert_alcoholic_table = PostgresOperator(
+            task_id='create_insert_alcoholic_table',
+            postgres_conn_id='postgres_default',
+            sql="sql/consumption_category.sql",
+            params={"table_name": "alcoholic", "category": "Alcoholic beverages"}
+        )
 
-    # create_insert_cereals_bakery_table = PostgresOperator(
-    #     task_id='create_insert_cereals_bakery_table',
-    #     postgres_conn_id='postgres_default',
-    #     sql="sql/consumption_cereals_bakery.sql",
-    # )
+        create_insert_cereals_bakery_table = PostgresOperator(
+            task_id='create_insert_cereals_bakery_table',
+            postgres_conn_id='postgres_default',
+            sql="sql/consumption_category.sql",
+            params={"table_name": "cereals_bakery", "category": "Cereals and bakery products"}
+        )
 
-    # create_insert_meats_poultry_table = PostgresOperator(
-    #     task_id='create_insert_meats_poultry_table',
-    #     postgres_conn_id='postgres_default',
-    #     sql="sql/consumption_meats_poultry.sql",
-    # )
+        create_insert_meats_poultry_table = PostgresOperator(
+            task_id='create_insert_meats_poultry_table',
+            postgres_conn_id='postgres_default',
+            sql="sql/consumption_category.sql",
+            params={"table_name": "meats_poultry", "category": "Meats and poultry"}
+        )
 
+        create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table
+        
     # =================== using dynamic tasks ======================
-    from dags.python.transform_load_data import create_insert_table
+    # from dags.python.transform_load_data import create_insert_table
 
-    data = create_insert_table(config_info)
+    # data = create_insert_table(config_info)
 
-    create_insert_dynamic_task = PostgresOperator.partial(
-        task_id="create_insert_dynamic_task",
-        postgres_conn_id="postgres_default",
-    ).expand(sql=data)
+    # create_insert_dynamic_task = PostgresOperator.partial(
+    #     task_id="create_insert_dynamic_task",
+    #     postgres_conn_id="postgres_default",
+    # ).expand(sql=data)
     # ========================================================
 
     # 4: Check data
@@ -109,5 +115,5 @@ with DAG('filtering_customer_consumption_backup',
     )
 
     # 5: Set the Task Dependencies
-    # wait_and_check_file >> process_data_task >> create_stored_table >> store_data_task >> [create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table]
-    wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_dynamic_task >> check_data_task
+    wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_data >> check_data_task
+    # wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_dynamic_task >> check_data_task
