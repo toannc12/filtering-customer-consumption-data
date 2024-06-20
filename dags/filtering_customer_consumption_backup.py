@@ -65,30 +65,42 @@ with DAG('filtering_customer_consumption_backup',
 
         process_data_task >> store_data_task
 
-    with TaskGroup(group_id='create_insert_data') as create_insert_data:
-        create_insert_alcoholic_table = PostgresOperator(
-            task_id='create_insert_alcoholic_table',
-            postgres_conn_id='postgres_default',
-            sql="sql/consumption_category.sql",
-            params={"table_name": "alcoholic", "category": "Alcoholic beverages"}
+    # with TaskGroup(group_id='create_insert_data') as create_insert_data:
+    #     create_insert_alcoholic_table = PostgresOperator(
+    #         task_id='create_insert_alcoholic_table',
+    #         postgres_conn_id='postgres_default',
+    #         sql="sql/consumption_category.sql",
+    #         params={"table_name": "alcoholic", "category": "Alcoholic beverages"}
+    #     )
+
+    #     create_insert_cereals_bakery_table = PostgresOperator(
+    #         task_id='create_insert_cereals_bakery_table',
+    #         postgres_conn_id='postgres_default',
+    #         sql="sql/consumption_category.sql",
+    #         params={"table_name": "cereals_bakery", "category": "Cereals and bakery products"}
+    #     )
+
+    #     create_insert_meats_poultry_table = PostgresOperator(
+    #         task_id='create_insert_meats_poultry_table',
+    #         postgres_conn_id='postgres_default',
+    #         sql="sql/consumption_category.sql",
+    #         params={"table_name": "meats_poultry", "category": "Meats and poultry"}
+    #     )
+
+        # create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table
+    
+    ### dynamic task use for expand ###
+    with TaskGroup(group_id='transform_and_load_data') as transform_and_load_data:
+        create_insert_dynamic_task = PostgresOperator.partial(
+            task_id="create_insert_dynamic_task",
+            sql = f'{config_info["paths"]["sql_path"]}/consumption_category.sql',
+            postgres_conn_id="postgres_default",
+        ).expand(
+            params = [{'category': category,
+                       'table_name': table} 
+                       for category, table in zip(config_info['categories'], config_info["tables"])]
         )
 
-        create_insert_cereals_bakery_table = PostgresOperator(
-            task_id='create_insert_cereals_bakery_table',
-            postgres_conn_id='postgres_default',
-            sql="sql/consumption_category.sql",
-            params={"table_name": "cereals_bakery", "category": "Cereals and bakery products"}
-        )
-
-        create_insert_meats_poultry_table = PostgresOperator(
-            task_id='create_insert_meats_poultry_table',
-            postgres_conn_id='postgres_default',
-            sql="sql/consumption_category.sql",
-            params={"table_name": "meats_poultry", "category": "Meats and poultry"}
-        )
-
-        create_insert_alcoholic_table, create_insert_cereals_bakery_table, create_insert_meats_poultry_table
-        
     # =================== using dynamic tasks ======================
     # from dags.python.transform_load_data import create_insert_table
 
@@ -115,5 +127,6 @@ with DAG('filtering_customer_consumption_backup',
     )
 
     # 5: Set the Task Dependencies
-    wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_data >> check_data_task
+    wait_and_check_file >> create_stored_table >> extract_data_task >> transform_and_load_data >> check_data_task
+    # wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_data >> check_data_task
     # wait_and_check_file >> create_stored_table >> extract_data_task >> create_insert_dynamic_task >> check_data_task

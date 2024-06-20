@@ -5,12 +5,18 @@
         "consumption_cereals_bakery_{{ ds_nodash }}",
         "consumption_meats_poultry_{{ ds_nodash }}"
     ],
+    "tables" : [
+        "alcoholic",
+        "cereals_bakery",
+        "meats_poultry"
+    ],
     "categories" : [
         "Alcoholic beverages", "Cereals and bakery products", "Meats and poultry"
     ],
     "paths": {
         "config_path" : "/usr/local/airflow",
         "file_path" : "usr/local/airflow/raw",
-        "file_path_save" : "usr/local/airflow/raw"
+        "file_path_save" : "usr/local/airflow/raw",
+        "sql_path" : "./sql"
     }
 }
