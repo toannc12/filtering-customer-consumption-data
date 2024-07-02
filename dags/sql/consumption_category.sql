@@ -9,7 +9,7 @@ CREATE TABLE consumption_{{ params.table_name }}_{{ ds_nodash }} (
 );
 
 INSERT INTO consumption_{{ params.table_name }}_{{ ds_nodash }}(category, sub_category, aggregation_date, millions_of_dollar, pipeline_exc_datetime)
-    SELECT 
+    SELECT
         Category, "Sub-Category", 
         to_date(Month,'YYYY-MM-DD'), 
         CAST("Millions of Dollars" AS INTEGER), 
