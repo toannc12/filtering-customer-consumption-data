@@ -122,7 +122,7 @@ with DAG('filtering_customer_consumption_backup',
             [
                 {"op_kwargs": {"table_names":config_info["table_names"][0]}},
                 {"op_kwargs": {"table_names":config_info["table_names"][1]}},
-                {"op_kwargs": {"table_names":config_info["table_names"][2]}}
+                {"op_kwargs": {"table_names":config_info["table_names"][2]}}           
         ]
     )
 
